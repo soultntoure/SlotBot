@@ -1,0 +1,95 @@
+# tasks.yaml
+parse_user_input:
+  description: >
+    Analyze the user's message to extract:
+    1. Primary intent (book, check_availability, cancel, reschedule, etc.)
+    2. Temporal entities (dates, times, durations)
+    3. User identification information (name, user_id, email)
+    4. Additional context (meeting type, participants, location)
+    5. List any missing critical information needed to fulfill the request
+    
+    Provide structured output that downstream agents can easily process.
+  expected_output: >
+    A structured JSON object containing:
+    - intent: The primary user intent
+    - entities: Extracted dates, times, durations, names
+    - user_info: Any provided user identification
+    - context: Additional relevant information
+    - missing_info: List of required information that is missing
+    - confidence: Confidence level in the parsing results
+  agent: nlp_parser
+  output_file: 'outputs/parsed_user_input.json'
+
+validate_session_state:
+  description: >
+    Review the parsed user input and current session state to:
+    1. Verify if user identity is known or provided
+    2. Check if all required information for the intended operation is available
+    3. Determine what additional information needs to be collected
+    4. Prepare data for either information collection or operation execution
+    
+    Consider the context from the NLP parsing results.
+  expected_output: >
+    A session state object indicating:
+    - identity_status: known/unknown/partial
+    - required_info_status: complete/incomplete
+    - missing_fields: Specific list of missing required fields
+    - next_action: collect_info/execute_operation/clarify_intent
+    - prepared_data: Structured data ready for next step
+  agent: session_manager
+  context:
+    - parse_user_input
+  output_file: 'outputs/session_state.json'
+
+collect_missing_information:
+  description: >
+    When the session manager indicates missing information:
+    1. Generate helpful questions to collect identity (name, ID)
+    2. Prompt for missing datetime/duration information
+    3. Adapt the prompts based on what specific fields are missing
+    4. Clearly and politely instruct the user on what is needed next
+  expected_output: >
+    A series of polite, user-friendly questions to collect any of the following:
+    - User ID
+    - Name
+    - Date or time for the appointment
+    - Duration
+  agent: response_agent
+  context:
+    - validate_session_state
+
+execute_calendar_operation:
+  description: >
+    When all required information is available, execute the calendar operation:
+    1. Perform the requested calendar action (booking, availability check, etc.)
+    2. Apply business rules and constraints (working hours, conflicts, etc.)
+    3. Handle conflicts by suggesting alternative times if needed
+    4. Provide detailed results of the operation
+    
+    Only execute when session manager confirms all information is complete.
+  expected_output: >
+    Structured operation result containing:
+    - operation_status: success/failed/alternatives_suggested
+    - result_data: Booking confirmation, availability info, or alternatives
+    - business_rule_notes: Any constraints or rules that were applied
+    - next_steps: What the user should do next, if anything
+  agent: calendar_manager
+  context:
+    - validate_session_state
+
+format_user_response:
+  description: >
+    Take the results from calendar operations or information collection needs
+    and format them into clear, user-friendly responses:
+    1. Convert technical results into natural language
+    2. Provide confirmation details for successful operations
+    3. Explain alternatives clearly when original request cannot be fulfilled
+    4. Include relevant next steps or follow-up actions
+    5. Maintain a helpful and professional tone throughout
+  expected_output: >
+    A polished, user-facing response that clearly communicates the results
+    or next steps in natural, conversational language that is easy to understand.
+  agent: response_agent
+  context:
+    - execute_calendar_operation
+    - collect_missing_information
