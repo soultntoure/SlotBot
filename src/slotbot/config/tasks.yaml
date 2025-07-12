@@ -18,7 +18,9 @@ parse_user_input:
     - missing_info: List of required information that is missing
     - confidence: Confidence level in the parsing results
   agent: nlp_parser
-  output_file: 'outputs/parsed_user_input.json'
+  # output_file: 'outputs/parsed_user_input.json'
+
+
 
 validate_session_state:
   description: >
@@ -28,45 +30,49 @@ validate_session_state:
     3. Determine what additional information needs to be collected
     4. Prepare data for either information collection or operation execution
     
-    Consider the context from the NLP parsing results.
+    Output must be valid JSON that can be parsed by conditional tasks.
   expected_output: >
     A session state object indicating:
     - identity_status: known/unknown/partial
     - required_info_status: complete/incomplete
-    - missing_fields: Specific list of missing required fields
+    - missing_fields: List of missing required fields
     - next_action: collect_info/execute_operation/clarify_intent
     - prepared_data: Structured data ready for next step
   agent: session_manager
   context:
     - parse_user_input
-  output_file: 'outputs/session_state.json'
+  # output_file: 'outputs/session_state.json'
+
+
+
+
 
 collect_missing_information:
   description: >
-    When the session manager indicates missing information:
-    1. Generate helpful questions to collect identity (name, ID)
-    2. Prompt for missing datetime/duration information
-    3. Adapt the prompts based on what specific fields are missing
-    4. Clearly and politely instruct the user on what is needed next
+    Generate appropriate questions to collect missing information:
+    1. Create user-friendly questions for missing user identity
+    2. Generate prompts for missing datetime/duration information
+    3. Provide clear guidance on what information is needed
+    4. Format questions in a conversational, helpful manner
+    
   expected_output: >
-    A series of polite, user-friendly questions to collect any of the following:
-    - User ID
-    - Name
-    - Date or time for the appointment
-    - Duration
+    User-friendly questions or prompts to collect the missing information,
+    formatted as natural conversation with clear instructions.
   agent: response_agent
   context:
     - validate_session_state
 
+
+
 execute_calendar_operation:
   description: >
-    When all required information is available, execute the calendar operation:
+    Execute the calendar operation when all required information is available:
     1. Perform the requested calendar action (booking, availability check, etc.)
     2. Apply business rules and constraints (working hours, conflicts, etc.)
     3. Handle conflicts by suggesting alternative times if needed
     4. Provide detailed results of the operation
     
-    Only execute when session manager confirms all information is complete.
+    This task only executes when all information is complete.
   expected_output: >
     Structured operation result containing:
     - operation_status: success/failed/alternatives_suggested
@@ -76,6 +82,10 @@ execute_calendar_operation:
   agent: calendar_manager
   context:
     - validate_session_state
+
+
+
+
 
 format_user_response:
   description: >
@@ -90,6 +100,3 @@ format_user_response:
     A polished, user-facing response that clearly communicates the results
     or next steps in natural, conversational language that is easy to understand.
   agent: response_agent
-  context:
-    - execute_calendar_operation
-    - collect_missing_information
