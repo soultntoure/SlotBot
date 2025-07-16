@@ -1,87 +1,90 @@
-# tasks.yaml
+#src/slotbot/config/tasks.yaml
 parse_user_input:
   description: >
-    Analyze the user's message to extract:
-    1. Primary intent (book, check_availability, cancel, reschedule, etc.)
-    2. Temporal entities (dates, times, durations)
-    3. User identification information (name, user_id, email)
-    4. Additional context (meeting type, participants, location)
-    5. List any missing critical information needed to fulfill the request
-    
-    Provide structured output that downstream agents can easily process.
-  expected_output: >
-    A structured JSON object containing:
-    - intent: The primary user intent
-    - entities: Extracted dates, times, durations, names
-    - user_info: Any provided user identification
-    - context: Additional relevant information
-    - missing_info: List of required information that is missing
-    - confidence: Confidence level in the parsing results
+    Analyze the user's message {user_message} to understand the primary intent and extract relevant entities.
+    Today's date is {current_date}. You MUST use this to resolve any relative time expressions (e.g., 'tomorrow', 'next Wednesday').
+    Follow these rules carefully:
+    1.  **Determine Intent:** First, identify the user's core intent: 'book', 'cancel', or 'check_availability'.
+    2.  **Handle 'book' or 'cancel' Intents:** 
+        - If the intent is to book or cancel, you MUST extract or infer a specific `start_time`.
+        **CRITICAL CALCULATION:** After determining the `start_time`, and if the end_time wasnt given by the user, you MUST CALCULATE the `end_time`. The end_time is exactly 60 minutes after the start_time.
+        - If the user provides a relative time, convert it to an absolute ISO datetime format.
+        - The `patient_email` is REQUIRED for these intents. If it is not in the message, you MUST add 'patient_email' to the `missing_info` list.
+    3.  **Handle 'check_availability' Intent:**
+        - If the user is asking about free times (e.g., 'are you free next week?', 'what about evenings?'), set the intent to 'check_availability'.
+        - For these queries, do NOT invent a specific `start_time`. Instead, capture the user's time description (e.g., 'next week', 'evenings on weekdays') and put it in the `temporal_expression` field.
+        - The `patient_email` is OPTIONAL for this intent.
+    4.  **Extract User Info:** If an email is provided in any context, populate `patient_email`.
   agent: nlp_parser
-  # output_file: 'outputs/parsed_user_input.json'
+  expected_output: >
+    A JSON object matching the UserInputParsed schema.
+  agent: nlp_parser
+  output_file: 'outputs/parsed_user_input.json'
 
 
 
 validate_session_state:
   description: >
-    Review the parsed user input and current session state to:
-    1. Verify if user identity is known or provided
-    2. Check if all required information for the intended operation is available
-    3. Determine what additional information needs to be collected
-    4. Prepare data for either information collection or operation execution
-    
-    Output must be valid JSON that can be parsed by conditional tasks.
+    Check the parsed user input for the `patient_email` field:
+      - If `patient_email` is null or missing, set identity_status to 'unknown'.
+      - If `patient_email` is present, set identity_status to 'known'.
+
+    Required fields in order to proceed with calendar operations:
+      - `start_time`
+      - `end_time`
+      - `patient_email`
+    Determine:
+      - If all required fields are present, set info_completeness_status to 'complete'.
+      - If any required fields are missing, set info_completeness_status to 'incomplete'.
+    Prepare:
+      - next_action: 'collect_info' if info_completeness_status is incomplete, otherwise 'execute_operation'.
+      - missing_info: List of any missing required fields.
+
   expected_output: >
     A session state object indicating:
-    - identity_status: known/unknown/partial
-    - required_info_status: complete/incomplete
+    - identity_status: known/unknown
+    - info_completeness_status: complete/incomplete
     - missing_fields: List of missing required fields
-    - next_action: collect_info/execute_operation/clarify_intent
-    - prepared_data: Structured data ready for next step
+    - next_action: collect_info/execute_operation
+    - missing_info: List of any additional information needed from the user
   agent: session_manager
   context:
     - parse_user_input
-  # output_file: 'outputs/session_state.json'
-
-
-
+  output_file: 'outputs/session_state.json'
 
 
 collect_missing_information:
   description: >
-    Generate appropriate questions to collect missing information:
-    1. Create user-friendly questions for missing user identity
-    2. Generate prompts for missing datetime/duration information
-    3. Provide clear guidance on what information is needed
-    4. Format questions in a conversational, helpful manner
-    
+    Generate clear, concise questions to collect any missing information identified in the previous step.
+    For each item in the `missing_info` list, create a separate, user-friendly prompt 
+    that asks for the specific detail (e.g., "Could you please provide your email address?" or "What time would you like to book your appointment?"). 
+    Ensure the questions are polite, direct, and easy to understand. 
+    If multiple pieces of information are missing ask in a single message, e.g., "Could you please provide your email address and the time you would like to book your appointment?".
   expected_output: >
     User-friendly questions or prompts to collect the missing information,
     formatted as natural conversation with clear instructions.
   agent: response_agent
   context:
     - validate_session_state
+  output_file: 'outputs/missing_information_questions.json'
 
 
 
-execute_calendar_operation:
-  description: >
-    Execute the calendar operation when all required information is available:
-    1. Perform the requested calendar action (booking, availability check, etc.)
-    2. Apply business rules and constraints (working hours, conflicts, etc.)
-    3. Handle conflicts by suggesting alternative times if needed
-    4. Provide detailed results of the operation
-    
-    This task only executes when all information is complete.
-  expected_output: >
-    Structured operation result containing:
-    - operation_status: success/failed/alternatives_suggested
-    - result_data: Booking confirmation, availability info, or alternatives
-    - business_rule_notes: Any constraints or rules that were applied
-    - next_steps: What the user should do next, if anything
-  agent: calendar_manager
-  context:
-    - validate_session_state
+# book_appointment:
+#   description: >
+#     Book an appointment for the user based on the provided details.
+#     This involves interacting with the calendar to find available slots,
+#     propose times, and confirm the booking.
+#     Expected output should include confirmation details or alternative suggestions.
+#   expected_output: >
+#     A structured output indicating the status of the appointment booking:
+#     - status: booked/failed/proposed_times
+#     - confirmation_details: Confirmation number or details of the booked appointment
+#     - alternatives: List of alternative times if the requested time was unavailable
+#     - notes: Any relevant notes or constraints applied during booking
+#   agent: calendar_manager
+#   context:
+#     - validate_session_state
 
 
 
@@ -89,14 +92,19 @@ execute_calendar_operation:
 
 format_user_response:
   description: >
-    Take the results from calendar operations or information collection needs
-    and format them into clear, user-friendly responses:
-    1. Convert technical results into natural language
-    2. Provide confirmation details for successful operations
-    3. Explain alternatives clearly when original request cannot be fulfilled
-    4. Include relevant next steps or follow-up actions
-    5. Maintain a helpful and professional tone throughout
+    Format the output from previous tasks into a clear, friendly message for the user.
   expected_output: >
     A polished, user-facing response that clearly communicates the results
     or next steps in natural, conversational language that is easy to understand.
   agent: response_agent
+  context:
+    - parse_user_input
+
+  # description: >
+  #   Take the results from calendar operations or information collection needs
+  #   and format them into clear, user-friendly responses:
+  #   1. Convert technical results into natural language
+  #   2. Provide confirmation details for successful operations
+  #   3. Explain alternatives clearly when original request cannot be fulfilled
+  #   4. Include relevant next steps or follow-up actions
+  #   5. Maintain a helpful and professional tone throughout

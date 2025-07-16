@@ -1,15 +1,17 @@
 # crew.py
+import json
 from crewai import Agent, Crew, Process, Task
+from crewai.tools import BaseTool
 from crewai.project import CrewBase, agent, crew, task
 from crewai.tasks.conditional_task import ConditionalTask
 from crewai.tasks.task_output import TaskOutput
 from crewai.agents.agent_builder.base_agent import BaseAgent
 from typing import List
-import json
-from .models import ParsedInputOutput
-from .models import SessionStateOutput 
-from .tools.calendar_tool import DummyCalendarTool  # Import your calendar tool
- 
+from .models import SessionState
+from .models import UserInputParsed
+from .tools.calendar_tools import BookAppointmentTool  # Import the actual tool
+
+
 
 @CrewBase
 class CalendarBookingCrew():
@@ -32,15 +34,13 @@ class CalendarBookingCrew():
             verbose=True
         )
 
-    @agent
-    def calendar_manager(self) -> Agent:
-        return Agent(
-            config=self.agents_config['calendar_manager'],
-            verbose=True,
-            tools=[DummyCalendarTool()]
-            # Add calendar tools here when available
-            # tools=[CalendarAPITool()]
-        )
+    # @agent
+    # def calendar_manager(self) -> Agent:
+    #     return Agent(
+    #         config=self.agents_config['calendar_manager'],
+    #         verbose=True,
+    #         tools=[BookAppointmentTool()]
+    #     )
 
     @agent
     def response_agent(self) -> Agent:
@@ -49,7 +49,7 @@ class CalendarBookingCrew():
             verbose=True
         )
 
-    # Condition function for the conditional task
+    # # Condition function for the conditional task
     def is_information_missing(self, output: TaskOutput) -> bool:
         """
         Check if information is missing from the session validation.
@@ -67,7 +67,7 @@ class CalendarBookingCrew():
                 return True
             
             # Check if required information status indicates missing data
-            required_info_status = result.get('required_info_status', 'incomplete')
+            required_info_status = result.get('info_completeness_status', 'incomplete')
             next_action = result.get('next_action', 'collect_info')
             
             # Execute the task if information is incomplete or action is to collect info
@@ -108,17 +108,17 @@ class CalendarBookingCrew():
     def parse_user_input(self) -> Task:
         return Task(
             config=self.tasks_config['parse_user_input'],
-            output_pydantic=ParsedInputOutput  # Use the model from models.py
+            output_pydantic=UserInputParsed,
         )
 
     @task
     def validate_session_state(self) -> Task:
         return Task(
             config=self.tasks_config['validate_session_state'],
-            output_pydantic=SessionStateOutput  # Define this Pydantic model
+            output_pydantic=SessionState  # Define this Pydantic model
         )
 
-    # CONDITIONAL TASK - Only executes if information is missing
+    # # CONDITIONAL TASK - Only executes if information is missing
     @task
     def collect_missing_information_task(self) -> ConditionalTask:
         return ConditionalTask(
@@ -128,14 +128,14 @@ class CalendarBookingCrew():
         )
 
     
-    # CONDITIONAL TASK - Only executes if information is complete
-    @task
-    def execute_calendar_operation_task(self) -> ConditionalTask:
-        return ConditionalTask(
-            config=self.tasks_config['execute_calendar_operation'],
-            condition=self.is_information_complete,  # This determines if task executes
-            agent=self.calendar_manager()
-        )
+    # # CONDITIONAL TASK - Only executes if information is complete
+    # @task
+    # def book_appointment(self) -> ConditionalTask:
+    #     return ConditionalTask(
+    #         config=self.tasks_config['book_appointment'],
+    #         condition=self.is_information_complete,  # This determines if task executes
+    #         agent=self.calendar_manager()
+    #     )
 
     @task
     def format_user_response(self) -> Task:
@@ -152,7 +152,7 @@ class CalendarBookingCrew():
                 self.parse_user_input(),
                 self.validate_session_state(),
                 self.collect_missing_information_task(),  # Conditional
-                self.execute_calendar_operation_task(),   # Conditional
+                # self.book_appointment(),   # Conditional
                 self.format_user_response()
             ],
             process=Process.sequential,
