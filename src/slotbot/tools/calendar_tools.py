@@ -7,17 +7,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-
-# Assuming get_calendar_service is in a local module
-# If it's not, you might need to adjust the import path
-# For example, if it's in the same directory:
-# from .oauth_client import get_calendar_service
-# Or if it's in a subdirectory:
-# from ..google_api.oauth_client import get_calendar_service
-# Based on the provided file structure, it seems to be in a sibling directory 'google_api'
-# Let's assume the import path is correct as provided in the original file.
 from ..google_api.Oauth_client import get_calendar_service
-
 from pydantic import BaseModel, Field
 
 
@@ -43,12 +33,11 @@ class BookAppointmentTool(BaseTool):
     
     def _run(
         self,
-        patient_name: str,
         date: str,
         time: str,
+        patient_email: str = None,
         duration: int = 60,
         appointment_type: str = "Consultation",
-        patient_email: Optional[str] = None,
         notes: Optional[str] = None
     ) -> str:
         try:
@@ -83,8 +72,8 @@ class BookAppointmentTool(BaseTool):
 
             # Create event
             event = {
-                'summary': f"{appointment_type} - {patient_name}",
-                'description': f"Patient: {patient_name}\nType: {appointment_type}",
+                'summary': f"{appointment_type} - {patient_email}",
+                'description': f"Patient: {patient_email}\nType: {appointment_type}",
                 'start': {
                     'dateTime': start_iso,
                     'timeZone': 'UTC',  # Google Calendar API often prefers UTC or a specific timezone

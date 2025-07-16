@@ -9,7 +9,7 @@ def run():
     Run the crew.
     """
     inputs = {
-        'user_message': 'I am soultntoure@gmail.com Book an appointment next Monday at 3pm',
+        'user_message': ' Book an appointment next Monday at 3pm',
         'current_date': datetime.now().isoformat()
     }
     

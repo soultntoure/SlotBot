@@ -1,4 +1,5 @@
-# crew.py
+# Updated crew.py with None handling logic
+
 import json
 from crewai import Agent, Crew, Process, Task
 from crewai.tools import BaseTool
@@ -8,9 +9,9 @@ from crewai.tasks.task_output import TaskOutput
 from crewai.agents.agent_builder.base_agent import BaseAgent
 from typing import List
 from .models import SessionState
+from .models import BookAppointmentOutput
 from .models import UserInputParsed
-from .tools.calendar_tools import BookAppointmentTool  # Import the actual tool
-
+from .tools.calendar_tools import BookAppointmentTool 
 
 
 @CrewBase
@@ -34,13 +35,13 @@ class CalendarBookingCrew():
             verbose=True
         )
 
-    # @agent
-    # def calendar_manager(self) -> Agent:
-    #     return Agent(
-    #         config=self.agents_config['calendar_manager'],
-    #         verbose=True,
-    #         tools=[BookAppointmentTool()]
-    #     )
+    @agent
+    def calendar_manager(self) -> Agent:
+        return Agent(
+            config=self.agents_config['calendar_manager'],
+            verbose=True,
+            tools=[BookAppointmentTool()]
+        )
 
     @agent
     def response_agent(self) -> Agent:
@@ -49,60 +50,95 @@ class CalendarBookingCrew():
             verbose=True
         )
 
-    # # Condition function for the conditional task
-    def is_information_missing(self, output: TaskOutput) -> bool:
+    def is_information_missing(self, validation_output: TaskOutput) -> bool:
         """
         Check if information is missing from the session validation.
         Returns True if information is missing (task should execute),
         False if all information is complete (task should be skipped).
         """
+        print("--- DEBUGGING VALIDATION OUTPUT ---")
+        print(f"Type of validation_output: {type(validation_output)}")
+        print(f"Raw output: '{validation_output.raw}'")
+        if hasattr(validation_output, 'pydantic') and validation_output.pydantic:
+            print(f"Pydantic output: {validation_output.pydantic.dict()}")
+        else:
+            print("Pydantic output: None")
+        print("---------------------------------")
         try:
-            # Parse the output from validate_session_state
-            if hasattr(output, 'raw'):
-                result = json.loads(output.raw)
-            elif hasattr(output, 'pydantic'):
-                result = output.pydantic.dict()
+            # Check if this is a None/empty output (from a skipped task)
+            if not validation_output or not hasattr(validation_output, 'raw') or not validation_output.raw:
+                print("[DEBUG] is_information_missing: Empty/None output detected, assuming info is complete")
+                return False  # Don't collect info if previous task was skipped
+            
+            # Parse the validation output
+            if hasattr(validation_output, 'raw') and validation_output.raw:
+                result = json.loads(validation_output.raw)
+            elif hasattr(validation_output, 'pydantic') and validation_output.pydantic:
+                result = validation_output.pydantic.dict()
             else:
-                # Fallback: assume information is missing if we can't parse
+                print("[DEBUG] is_information_missing: No parseable output, defaulting to collect info")
                 return True
             
-            # Check if required information status indicates missing data
             required_info_status = result.get('info_completeness_status', 'incomplete')
             next_action = result.get('next_action', 'collect_info')
             
             # Execute the task if information is incomplete or action is to collect info
-            return (required_info_status == 'incomplete' or 
-                    next_action == 'collect_info')
+            should_execute = (required_info_status == 'incomplete' or 
+                             next_action == 'collect_info')
+            
+            print(f"[DEBUG] is_information_missing: {should_execute} (status: {required_info_status}, action: {next_action})")
+            return should_execute
                     
         except Exception as e:
-            # If we can't determine the status, assume information is missing
             print(f"Error checking information status: {e}")
-            return True
-
-    def is_information_complete(self, output: TaskOutput) -> bool:
+            return True  # Default to collecting info if there's an error
+        
+    def is_information_complete(self, validation_output: TaskOutput) -> bool:
         """
-        Check if all information is complete for calendar operations.
+        Check if information is complete for booking operations.
         Returns True if information is complete (task should execute),
         False if information is missing (task should be skipped).
+        
+        Key Logic: If validation_output is None/empty (from skipped collect_missing_information task),
+        this means the info was complete, so we should proceed with booking.
         """
+        print("--- DEBUGGING VALIDATION OUTPUT ---")
+        print(f"Type of validation_output: {type(validation_output)}")
+        print(f"Raw output: '{validation_output.raw}'")
+        if hasattr(validation_output, 'pydantic') and validation_output.pydantic:
+            print(f"Pydantic output: {validation_output.pydantic.dict()}")
+        else:
+            print("Pydantic output: None")
+        print("---------------------------------")
         try:
-            if hasattr(output, 'raw'):
-                result = json.loads(output.raw)
-            elif hasattr(output, 'pydantic'):
-                result = output.pydantic.dict()
+            # CRITICAL: If this is a None/empty output from a skipped task,
+            # it means collect_missing_information was skipped because info was complete
+            if not validation_output or not hasattr(validation_output, 'raw') or not validation_output.raw:
+                print("[DEBUG] is_information_complete: Empty/None output detected - info must be complete!")
+                return True  # Proceed with booking since collect_missing_information was skipped
+            
+            # If we have actual validation output, parse it
+            if hasattr(validation_output, 'raw') and validation_output.raw:
+                result = json.loads(validation_output.raw)
+            elif hasattr(validation_output, 'pydantic') and validation_output.pydantic:
+                result = validation_output.pydantic.dict()
             else:
+                print("[DEBUG] is_information_complete: No parseable output, assuming incomplete")
                 return False
             
-            required_info_status = result.get('required_info_status', 'incomplete')
+            required_info_status = result.get('info_completeness_status', 'incomplete')
             next_action = result.get('next_action', 'collect_info')
             
-            # Execute the task if information is complete and action is to execute operation
-            return (required_info_status == 'complete' and 
-                    next_action == 'execute_operation')
+            # Execute the task if information is complete AND action is to execute operation
+            should_execute = (required_info_status == 'complete' and 
+                             next_action == 'execute_operation')
+            
+            print(f"[DEBUG] is_information_complete: {should_execute} (status: {required_info_status}, action: {next_action})")
+            return should_execute
                     
         except Exception as e:
-            print(f"Error checking completion status: {e}")
-            return False
+            print(f"Error checking information completeness: {e}")
+            return False  # Default to not booking if there's an error
 
     @task
     def parse_user_input(self) -> Task:
@@ -115,27 +151,25 @@ class CalendarBookingCrew():
     def validate_session_state(self) -> Task:
         return Task(
             config=self.tasks_config['validate_session_state'],
-            output_pydantic=SessionState  # Define this Pydantic model
+            output_pydantic=SessionState
         )
 
-    # # CONDITIONAL TASK - Only executes if information is missing
     @task
-    def collect_missing_information_task(self) -> ConditionalTask:
+    def collect_missing_information(self) -> ConditionalTask:
         return ConditionalTask(
             config=self.tasks_config['collect_missing_information'],
-            condition=self.is_information_missing,  # This determines if task executes
+            condition=self.is_information_missing,
             agent=self.response_agent()
         )
 
-    
-    # # CONDITIONAL TASK - Only executes if information is complete
-    # @task
-    # def book_appointment(self) -> ConditionalTask:
-    #     return ConditionalTask(
-    #         config=self.tasks_config['book_appointment'],
-    #         condition=self.is_information_complete,  # This determines if task executes
-    #         agent=self.calendar_manager()
-    #     )
+    @task
+    def book_appointment(self) -> ConditionalTask:
+        return ConditionalTask(
+            config=self.tasks_config['book_appointment'],
+            condition=self.is_information_complete,
+            agent=self.calendar_manager(),
+            output_pydantic=BookAppointmentOutput
+        )
 
     @task
     def format_user_response(self) -> Task:
@@ -151,8 +185,8 @@ class CalendarBookingCrew():
             tasks=[
                 self.parse_user_input(),
                 self.validate_session_state(),
-                self.collect_missing_information_task(),  # Conditional
-                # self.book_appointment(),   # Conditional
+                self.collect_missing_information(),
+                self.book_appointment(),
                 self.format_user_response()
             ],
             process=Process.sequential,

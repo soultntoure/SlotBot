@@ -69,25 +69,21 @@ collect_missing_information:
   output_file: 'outputs/missing_information_questions.json'
 
 
-
-# book_appointment:
-#   description: >
-#     Book an appointment for the user based on the provided details.
-#     This involves interacting with the calendar to find available slots,
-#     propose times, and confirm the booking.
-#     Expected output should include confirmation details or alternative suggestions.
-#   expected_output: >
-#     A structured output indicating the status of the appointment booking:
-#     - status: booked/failed/proposed_times
-#     - confirmation_details: Confirmation number or details of the booked appointment
-#     - alternatives: List of alternative times if the requested time was unavailable
-#     - notes: Any relevant notes or constraints applied during booking
-#   agent: calendar_manager
-#   context:
-#     - validate_session_state
-
-
-
+book_appointment:
+  description: >
+    Book an appointment for the user based on the provided date, time, and email details extracted from the parsed user input.
+    Use the information in the parsed user input to schedule the appointment in the calendar system.
+    You MUST use the BookAppointmentTool to perform the booking operation.
+    If the requested slot is available, confirm the booking; otherwise, indicate failure and provide a reason.
+  expected_output: >
+    A structured output containing:
+    - status: booked or failed
+    - confirmation_details: Details of the booked appointment if successful
+    - failure_reason: Explanation if booking could not be completed
+  agent: calendar_manager
+  context:
+    - parse_user_input
+    - validate_session_state
 
 
 format_user_response:
@@ -99,12 +95,6 @@ format_user_response:
   agent: response_agent
   context:
     - parse_user_input
-
-  # description: >
-  #   Take the results from calendar operations or information collection needs
-  #   and format them into clear, user-friendly responses:
-  #   1. Convert technical results into natural language
-  #   2. Provide confirmation details for successful operations
-  #   3. Explain alternatives clearly when original request cannot be fulfilled
-  #   4. Include relevant next steps or follow-up actions
-  #   5. Maintain a helpful and professional tone throughout
+    - book_appointment
+    - validate_session_state
+    - collect_missing_information

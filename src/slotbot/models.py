@@ -62,3 +62,22 @@ class SessionState(BaseModel):
     )
     missing_info: List[str]
     next_action: Literal['collect_info', 'execute_operation']
+
+class BookAppointmentOutput(BaseModel):
+    """
+    Output model for the book_appointment task.
+    Contains the status of the booking, confirmation details if successful,
+    and a failure reason if not.
+    """
+    status: Literal['booked', 'failed'] = Field(
+        ...,
+        description="Indicates whether the appointment was successfully booked or not."
+    )
+    confirmation_details: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Details of the booked appointment (e.g., time, email, location) if successful."
+    )
+    failure_reason: Optional[str] = Field(
+        None,
+        description="Explanation for why the booking failed, if applicable."
+    )
