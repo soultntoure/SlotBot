@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, Any
 from src.slotbot.crew import CalendarBookingCrew
@@ -10,6 +11,15 @@ import uuid
 session_store: Dict[str, Any] = {}
 
 app = FastAPI()
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
+)
 
 # Define Pydantic models directly here or import from api/schemas.py
 class ChatRequest(BaseModel):

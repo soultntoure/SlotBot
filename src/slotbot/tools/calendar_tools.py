@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, List
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
+from google_auth_oauthlib.flow import InstalledAppFlow  # Requires 'uv pip install google-auth-oauthlib'
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from ..google_api.Oauth_client import get_calendar_service

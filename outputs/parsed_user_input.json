@@ -1,1 +1,1 @@
-{"intent":"book","patient_email":"hamzakhaledlklk@gmail.com","start_time":"2025-07-22T17:00:00","end_time":"2025-07-22T18:00:00","temporal_expression":null,"missing_info":[]}
+{"intent":"check_availability","patient_email":null,"start_time":"2025-07-22T14:00:00","end_time":null,"temporal_expression":null,"missing_info":[]}
