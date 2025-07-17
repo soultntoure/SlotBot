@@ -75,32 +75,22 @@ collect_missing_information:
   output_file: 'outputs/missing_information_questions.json'
 
 
-check_availability:
+execute_calendar_action:
   description: >
-    Check if a specific time slot is available using the `CheckAvailabilityTool`.
-    You MUST use the `CheckAvailabilityTool` to perform this check.
-    The user's requested time is available in the `start_time` from the parsed user input.
-    Use this information to check the calendar.
-  expected_output: >
-    A JSON object with the status of the time slot ('free' or 'busy')
-    and a corresponding message.
-  agent: calendar_manager
-  context:
-    - parse_user_input
-  output_file: 'outputs/availability_check.json'
+    Execute the appropriate calendar action based on the `next_action` provided by the session state.
+    You have two tools available: `CheckAvailabilityTool` and `BookAppointmentTool`.
 
+    - **If `next_action` is 'check_availability':**
+      - Use the `CheckAvailabilityTool`.
+      - You MUST extract the `date` and `time` from the `start_time` field of the parsed user input.
+      - For example, from '2025-07-18T17:00:00', you must extract `date='2025-07-18'` and `time='17:00'`.
 
-book_appointment:
-  description: >
-    Book an appointment for the user based on the provided date, time, and email details extracted from the parsed user input.
-    Use the information in the parsed user input to schedule the appointment in the calendar system.
-    You MUST use the BookAppointmentTool to perform the booking operation.
-    If the requested slot is available, confirm the booking; otherwise, indicate failure and provide a reason.
+    - **If `next_action` is 'execute_operation':**
+      - Use the `BookAppointmentTool`.
+      - You MUST extract the `date`, `time`, and `patient_email` from the parsed user input.
+
   expected_output: >
-    A structured output containing:
-    - status: booked or failed
-    - confirmation_details: Details of the booked appointment if successful
-    - failure_reason: Explanation if booking could not be completed
+    A JSON object confirming the action taken. For availability checks, it should include the status ('free' or 'busy'). For bookings, it should include the booking status ('booked' or 'failed').
   agent: calendar_manager
   context:
     - parse_user_input
@@ -110,16 +100,12 @@ book_appointment:
 format_user_response:
   description: >
     Format the output from previous tasks into a clear, friendly message for the user.
-    - If the context includes the output of a `check_availability` task, check the status. If 'free', inform the user the slot is available and ask if they would like to book it. If 'busy', inform the user the slot is not available.
-    - If the context includes a booking confirmation, provide the details.
-    - If the context includes a request for more information, relay that request clearly.
+    - If the output from `execute_calendar_action` indicates an availability check, inform the user if the slot is 'free' or 'busy'. If free, ask if they would like to book it.
+    - If the output from `execute_calendar_action` indicates a booking, confirm if it was 'booked' or 'failed'.
+    - If the output from `collect_missing_information` is present, relay the request for more information clearly.
   expected_output: >
-    A polished, user-facing response that clearly communicates the results
-    or next steps in natural, conversational language that is easy to understand.
+    A polished, user-facing response that clearly communicates the results or next steps in natural, conversational language.
   agent: response_agent
   context:
-    - parse_user_input
-    - book_appointment
-    - validate_session_state
+    - execute_calendar_action
     - collect_missing_information
-    - check_availability

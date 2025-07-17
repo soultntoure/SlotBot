@@ -21,6 +21,14 @@ class CalendarBookingCrew():
     agents_config = 'config/agents.yaml'
     tasks_config = 'config/tasks.yaml'
 
+    def __init__(self):
+        self._session_state_output = None
+
+    def _save_session_state(self, output: TaskOutput):
+        """Callback function to save the output of the validation task."""
+        print(f"\n--- [CALLBACK] Saving session state ---\nRaw output: {output.raw}\n------------------------------------")
+        self._session_state_output = output
+
     @agent
     def nlp_parser(self) -> Agent:
         return Agent(
@@ -50,32 +58,28 @@ class CalendarBookingCrew():
             verbose=True
         )
 
-    def _get_next_action(self, validation_output: TaskOutput) -> str:
-        """Helper function to safely extract next_action from task output."""
+    def _get_next_action(self) -> str:
+        """Helper function to safely extract next_action from the stored session state."""
         print("\n--- [DEBUG] In _get_next_action ---")
-        print(f"Received validation_output type: {type(validation_output)}")
         
-        if not validation_output:
-            print("Validation output is None. Returning 'default'.")
+        if not self._session_state_output:
+            print("Stored session state is None. Returning 'default'.")
             return "default"
             
-        raw_output = getattr(validation_output, 'raw', None)
-        pydantic_output = getattr(validation_output, 'pydantic', None)
-        
-        print(f"Raw output: '{raw_output}'")
-        print(f"Pydantic output: {pydantic_output}")
+        raw_output = getattr(self._session_state_output, 'raw', None)
+        print(f"Reading from stored raw output: '{raw_output}'")
 
         if not raw_output:
-            print("Raw output is empty or None. Returning 'default'.")
+            print("Stored raw output is empty or None. Returning 'default'.")
             return "default"
 
         try:
             data = json.loads(raw_output)
             next_action = data.get('next_action', 'default')
-            print(f"Successfully parsed next_action: '{next_action}'")
+            print(f"Successfully parsed next_action from stored state: '{next_action}'")
             return next_action
         except json.JSONDecodeError as e:
-            print(f"JSONDecodeError parsing raw output: {e}. Raw content was: '{raw_output}'")
+            print(f"JSONDecodeError parsing stored raw output: {e}. Raw content was: '{raw_output}'")
             return "default"
         except Exception as e:
             print(f"An unexpected error occurred in _get_next_action: {e}")
@@ -83,21 +87,17 @@ class CalendarBookingCrew():
 
     def should_collect_info(self, validation_output: TaskOutput) -> bool:
         """Condition to run the 'collect_missing_information' task."""
-        next_action = self._get_next_action(validation_output)
+        # This function now ignores the validation_output and uses the stored state.
+        next_action = self._get_next_action()
         print(f"[DEBUG] Condition for 'collect_info': next_action is '{next_action}'")
         return next_action == 'collect_info'
 
-    def should_check_availability(self, validation_output: TaskOutput) -> bool:
-        """Condition to run the 'check_availability' task."""
-        next_action = self._get_next_action(validation_output)
-        print(f"[DEBUG] Condition for 'check_availability': next_action is '{next_action}'")
-        return next_action == 'check_availability'
-
-    def should_book_appointment(self, validation_output: TaskOutput) -> bool:
-        """Condition to run the 'book_appointment' task."""
-        next_action = self._get_next_action(validation_output)
-        print(f"[DEBUG] Condition for 'book_appointment': next_action is '{next_action}'")
-        return next_action == 'execute_operation'
+    def should_execute_action(self, validation_output: TaskOutput) -> bool:
+        """Condition to run the main action task."""
+        # This function now ignores the validation_output and uses the stored state.
+        next_action = self._get_next_action()
+        print(f"[DEBUG] Condition for 'execute_action': next_action is '{next_action}'")
+        return next_action in ['check_availability', 'execute_operation']
 
     @task
     def parse_user_input(self) -> Task:
@@ -110,7 +110,8 @@ class CalendarBookingCrew():
     def validate_session_state(self) -> Task:
         return Task(
             config=self.tasks_config['validate_session_state'],
-            output_pydantic=SessionState
+            output_pydantic=SessionState,
+            callback=self._save_session_state
         )
 
     @task
@@ -118,27 +119,16 @@ class CalendarBookingCrew():
         return ConditionalTask(
             config=self.tasks_config['collect_missing_information'],
             condition=self.should_collect_info,
-            agent=self.response_agent(),
-            context=[self.validate_session_state()]
+            agent=self.response_agent()
         )
 
     @task
-    def check_availability(self) -> ConditionalTask:
+    def execute_calendar_action(self) -> ConditionalTask:
         return ConditionalTask(
-            config=self.tasks_config['check_availability'],
-            condition=self.should_check_availability,
+            config=self.tasks_config['execute_calendar_action'],
+            condition=self.should_execute_action,
             agent=self.calendar_manager(),
-            context=[self.validate_session_state()]
-        )
-
-    @task
-    def book_appointment(self) -> ConditionalTask:
-        return ConditionalTask(
-            config=self.tasks_config['book_appointment'],
-            condition=self.should_book_appointment,
-            agent=self.calendar_manager(),
-            output_pydantic=BookAppointmentOutput,
-            context=[self.validate_session_state()]
+            context=[self.parse_user_input(), self.validate_session_state()]
         )
 
     @task
@@ -146,10 +136,8 @@ class CalendarBookingCrew():
         return Task(
             config=self.tasks_config['format_user_response'],
             context=[
-                self.validate_session_state(),
                 self.collect_missing_information(),
-                self.check_availability(),
-                self.book_appointment()
+                self.execute_calendar_action()
             ]
         )
 
@@ -162,8 +150,7 @@ class CalendarBookingCrew():
                 self.parse_user_input(),
                 self.validate_session_state(),
                 self.collect_missing_information(),
-                self.check_availability(),
-                self.book_appointment(),
+                self.execute_calendar_action(),
                 self.format_user_response()
             ],
             process=Process.sequential,

@@ -1,7 +1,7 @@
 from crewai.tools import BaseTool
 import os
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, List
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -108,13 +108,11 @@ class CheckAvailabilityTool(BaseTool):
 
             # Combine date and time and parse into datetime objects
             start_datetime_str = f"{date}T{time}"
-            start_datetime = datetime.strptime(start_datetime_str, "%Y-%m-%dT%H:%M")
+            # Make datetime timezone-aware for Google Calendar API RFC3339 compliance
+            start_datetime = datetime.strptime(start_datetime_str, "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc)
             end_datetime = start_datetime + timedelta(minutes=duration)
 
             # Format for Google Calendar API
-            # Using the local timezone is generally safer than assuming UTC ('Z')
-            # unless you are certain all inputs are in UTC.
-            # Let's rely on the system's default timezone interpretation for isoformat().
             time_min = start_datetime.isoformat()
             time_max = end_datetime.isoformat()
 
