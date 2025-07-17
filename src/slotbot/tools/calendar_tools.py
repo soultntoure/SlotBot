@@ -11,6 +11,12 @@ from ..google_api.Oauth_client import get_calendar_service
 from pydantic import BaseModel, Field
 
 
+class CheckAvailabilityArgs(BaseModel):
+    date: str = Field(..., description="Date in YYYY-MM-DD format")
+    time: str = Field(..., description="Time in HH:MM format (24-hour)")
+    duration: int = Field(60, description="Duration in minutes to check (default: 60)")
+
+
 class BookAppointmentArgs(BaseModel):
     date: str = Field(..., description="Date in YYYY-MM-DD format")
     time: str = Field(..., description="Time in HH:MM format (24-hour)")
@@ -77,3 +83,57 @@ class BookAppointmentTool(BaseTool):
             return f"An error occurred while booking the appointment: {error}"
         except Exception as e:
             return f"An unexpected error occurred: {e}"
+
+
+class CheckAvailabilityTool(BaseTool):
+    name: str = "CheckAvailabilityTool"
+    description: str = """
+    Check if a specific time slot is available in the Google Calendar.
+
+    Required parameters:
+    - date: Date in YYYY-MM-DD format
+    - time: Time in HH:MM format (24-hour)
+    
+    Optional parameters:
+    - duration: Duration in minutes to check (default: 60)
+    """
+    args_schema: type[BaseModel] = CheckAvailabilityArgs
+
+    def _run(self, date: str, time: str, duration: int = 60) -> str:
+        """
+        Checks for conflicting events in the Google Calendar for a given time slot.
+        """
+        try:
+            service = get_calendar_service()
+
+            # Combine date and time and parse into datetime objects
+            start_datetime_str = f"{date}T{time}"
+            start_datetime = datetime.strptime(start_datetime_str, "%Y-%m-%dT%H:%M")
+            end_datetime = start_datetime + timedelta(minutes=duration)
+
+            # Format for Google Calendar API
+            # Using the local timezone is generally safer than assuming UTC ('Z')
+            # unless you are certain all inputs are in UTC.
+            # Let's rely on the system's default timezone interpretation for isoformat().
+            time_min = start_datetime.isoformat()
+            time_max = end_datetime.isoformat()
+
+            events_result = service.events().list(
+                calendarId='primary',
+                timeMin=time_min,
+                timeMax=time_max,
+                singleEvents=True,
+                orderBy='startTime'
+            ).execute()
+            
+            events = events_result.get('items', [])
+
+            if not events:
+                return json.dumps({"status": "free", "message": "The time slot is available."})
+            else:
+                # It's more helpful to know what is blocking the time.
+                event_summaries = [event.get('summary', 'No Title') for event in events]
+                return json.dumps({"status": "busy", "message": f"The time slot is not available. Conflicting events: {', '.join(event_summaries)}"})
+
+        except Exception as e:
+            return json.dumps({"status": "error", "message": f"An unexpected error occurred: {e}"})

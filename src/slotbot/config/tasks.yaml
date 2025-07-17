@@ -11,8 +11,8 @@ parse_user_input:
         - If the user provides a relative time, convert it to an absolute ISO datetime format.
         - The `patient_email` is REQUIRED for these intents. If it is not in the message, you MUST add 'patient_email' to the `missing_info` list.
     3.  **Handle 'check_availability' Intent:**
-        - If the user is asking about free times (e.g., 'are you free next week?', 'what about evenings?'), set the intent to 'check_availability'.
-        - For these queries, do NOT invent a specific `start_time`. Instead, capture the user's time description (e.g., 'next week', 'evenings on weekdays') and put it in the `temporal_expression` field.
+        - If the user asks about a specific time (e.g., 'are you free tomorrow at 5 pm?'), you MUST parse this into a `start_time`.
+        - If the user asks a general question about time (e.g., 'what about evenings?', 'any time next week?'), capture this in the `temporal_expression` field and leave `start_time` as null.
         - The `patient_email` is OPTIONAL for this intent.
     4.  **Extract User Info:** If an email is provided in any context, populate `patient_email`.
   agent: nlp_parser
@@ -25,20 +25,26 @@ parse_user_input:
 
 validate_session_state:
   description: >
-    Check the parsed user input for the `patient_email` field:
-      - If `patient_email` is null or missing, set identity_status to 'unknown'.
-      - If `patient_email` is present, set identity_status to 'known'.
+    Act as a central router by analyzing the parsed user input and determining the next step.
+    The user's intent is the primary driver for your decision.
 
-    Required fields in order to proceed with calendar operations:
-      - `start_time`
-      - `end_time`
-      - `patient_email`
-    Determine:
-      - If all required fields are present, set info_completeness_status to 'complete'.
-      - If any required fields are missing, set info_completeness_status to 'incomplete'.
-    Prepare:
-      - next_action: 'collect_info' if info_completeness_status is incomplete, otherwise 'execute_operation'.
-      - missing_info: List of any missing required fields.
+    1.  **Analyze User Identity:**
+        - If `patient_email` is present, set `identity_status` to 'known'.
+        - Otherwise, set `identity_status` to 'unknown'.
+
+    2.  **Determine Next Action based on Intent:**
+        - **If intent is 'check_availability':**
+          - If `start_time` is present, the next action is `check_availability`. Set `info_completeness_status` to 'complete'.
+          - If `start_time` is missing (i.e., a general query like 'are you free?'), the next action is `collect_info`. Set `info_completeness_status` to 'incomplete' and add 'start_time' to `missing_info`.
+        - **If intent is 'book' or 'cancel':**
+          - Check for required fields: `start_time`, `end_time`, `patient_email`.
+          - If all are present, the next action is `execute_operation`. Set `info_completeness_status` to 'complete'.
+          - If any are missing, the next action is `collect_info`. Set `info_completeness_status` to 'incomplete' and list the missing fields in `missing_info`.
+        - **For any other intent:**
+          - Default to `collect_info` to clarify the user's needs.
+
+    3.  **Final Output:**
+        - Your output MUST be a session state object containing `identity_status`, `info_completeness_status`, `missing_info`, and the crucial `next_action` field.
 
   expected_output: >
     A session state object indicating:
@@ -69,6 +75,21 @@ collect_missing_information:
   output_file: 'outputs/missing_information_questions.json'
 
 
+check_availability:
+  description: >
+    Check if a specific time slot is available using the `CheckAvailabilityTool`.
+    You MUST use the `CheckAvailabilityTool` to perform this check.
+    The user's requested time is available in the `start_time` from the parsed user input.
+    Use this information to check the calendar.
+  expected_output: >
+    A JSON object with the status of the time slot ('free' or 'busy')
+    and a corresponding message.
+  agent: calendar_manager
+  context:
+    - parse_user_input
+  output_file: 'outputs/availability_check.json'
+
+
 book_appointment:
   description: >
     Book an appointment for the user based on the provided date, time, and email details extracted from the parsed user input.
@@ -89,6 +110,9 @@ book_appointment:
 format_user_response:
   description: >
     Format the output from previous tasks into a clear, friendly message for the user.
+    - If the context includes the output of a `check_availability` task, check the status. If 'free', inform the user the slot is available and ask if they would like to book it. If 'busy', inform the user the slot is not available.
+    - If the context includes a booking confirmation, provide the details.
+    - If the context includes a request for more information, relay that request clearly.
   expected_output: >
     A polished, user-facing response that clearly communicates the results
     or next steps in natural, conversational language that is easy to understand.
@@ -98,3 +122,4 @@ format_user_response:
     - book_appointment
     - validate_session_state
     - collect_missing_information
+    - check_availability
