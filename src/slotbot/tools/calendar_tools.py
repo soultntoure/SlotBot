@@ -101,37 +101,39 @@ class CheckAvailabilityTool(BaseTool):
 
     def _run(self, date: str, time: str, duration: int = 60) -> str:
         """
-        Checks for conflicting events in the Google Calendar for a given time slot.
+        Checks for conflicting events in the Google Calendar for a given time slot using the freebusy API.
         """
         try:
             service = get_calendar_service()
 
-            # Combine date and time and parse into datetime objects
+            # Define the timezone for Singapore (UTC+8)
+            sgt = timezone(timedelta(hours=8))
+
+            # Combine date and time and parse into a naive datetime object
             start_datetime_str = f"{date}T{time}"
-            # Make datetime timezone-aware for Google Calendar API RFC3339 compliance
-            start_datetime = datetime.strptime(start_datetime_str, "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc)
-            end_datetime = start_datetime + timedelta(minutes=duration)
+            naive_start_datetime = datetime.strptime(start_datetime_str, "%Y-%m-%dT%H:%M")
 
-            # Format for Google Calendar API
-            time_min = start_datetime.isoformat()
-            time_max = end_datetime.isoformat()
+            # Make the datetime object timezone-aware using the Singapore timezone
+            start_datetime_aware = naive_start_datetime.replace(tzinfo=sgt)
+            end_datetime_aware = start_datetime_aware + timedelta(minutes=duration)
 
-            events_result = service.events().list(
-                calendarId='primary',
-                timeMin=time_min,
-                timeMax=time_max,
-                singleEvents=True,
-                orderBy='startTime'
-            ).execute()
-            
-            events = events_result.get('items', [])
+            # Format for Google Calendar API (RFC3339 format)
+            time_min = start_datetime_aware.isoformat()
+            time_max = end_datetime_aware.isoformat()
 
-            if not events:
+            freebusy_query = {
+                "timeMin": time_min,
+                "timeMax": time_max,
+                "items": [{"id": "primary"}]
+            }
+
+            freebusy_result = service.freebusy().query(body=freebusy_query).execute()
+            busy_slots = freebusy_result.get('calendars', {}).get('primary', {}).get('busy', [])
+
+            if not busy_slots:
                 return json.dumps({"status": "free", "message": "The time slot is available."})
             else:
-                # It's more helpful to know what is blocking the time.
-                event_summaries = [event.get('summary', 'No Title') for event in events]
-                return json.dumps({"status": "busy", "message": f"The time slot is not available. Conflicting events: {', '.join(event_summaries)}"})
+                return json.dumps({"status": "busy", "message": "The time slot is not available."})
 
         except Exception as e:
             return json.dumps({"status": "error", "message": f"An unexpected error occurred: {e}"})
