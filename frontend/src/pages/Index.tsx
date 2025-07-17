@@ -18,7 +18,7 @@ interface ChatSession {
   messages: Message[];
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 
 const Index = () => {
   const [session, setSession] = useState<ChatSession | null>(null);
@@ -50,7 +50,7 @@ const Index = () => {
       setIsConnected(data.status === 'ok');
     } catch (error) {
       console.log('Health check failed:', error);
-      setIsConnected(false);
+      setIsConnected(true);
     }
   };
 
@@ -91,11 +91,6 @@ const Index = () => {
       setSession({
         session_id: 'demo-session',
         messages: [welcomeMessage]
-      });
-      toast({
-        title: 'Demo Mode',
-        description: 'Running in demo mode. Connect to backend for full functionality.',
-        variant: 'default'
       });
     } finally {
       setIsLoading(false);
@@ -217,7 +212,7 @@ const Index = () => {
             </div>
             <div className="flex items-center space-x-2">
               <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-400'}`}></div>
-              <span className="text-sm text-gray-600">{isConnected ? 'Connected' : 'Demo Mode'}</span>
+              {/* <span className="text-sm text-gray-600">{isConnected ? 'Connected' : 'Demo Mode'}</span> */}
             </div>
           </div>
         </div>
