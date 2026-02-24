@@ -1,270 +1,383 @@
-# SlotBot - AI-Powered Calendar Booking Assistant
+<div align="center">
 
-SlotBot is an intelligent calendar booking chatbot that uses multi-agent AI orchestration to manage appointment scheduling through natural language conversations. Built with CrewAI and FastAPI, it provides a seamless experience for booking, checking, and managing calendar appointments via Google Calendar integration.
+# 🤖 SlotBot
 
-## Features
+### AI-Powered Calendar Booking Assistant
 
-- **Natural Language Understanding**: Parse user intents for booking, checking availability, and managing appointments
-- **Multi-Agent Architecture**: Specialized AI agents for different tasks (NLP parsing, session management, calendar operations, response formatting)
-- **Google Calendar Integration**: Direct integration with Google Calendar for real-time availability and booking
-- **Session Management**: Persistent conversation sessions for contextual interactions
-- **Modern UI**: React-based frontend with Shadcn/UI components and Tailwind CSS
-- **RESTful API**: FastAPI backend with async support and CORS configuration
+*Book appointments through natural language — powered by a coordinated ensemble of specialized AI agents*
+
+<br/>
+
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Latest-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![CrewAI](https://img.shields.io/badge/CrewAI-0.134%2B-FF6B6B?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0xMiAyQzYuNDggMiAyIDYuNDggMiAxMnM0LjQ4IDEwIDEwIDEwIDEwLTQuNDggMTAtMTBTMTcuNTIgMiAxMiAyem0tMiAxNWwtNS01IDEuNDEtMS40MUwxMCAxNC4xN2w3LjU5LTcuNTlMMTkgOGwtOSA5eiIvPjwvc3ZnPg==&logoColor=white)](https://www.crewai.com/)
+[![Gemini](https://img.shields.io/badge/Gemini_2.5-Flash_Lite-8E75B2?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
+
+[![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite-5.4-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
+[![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-3.4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+[![Google Calendar](https://img.shields.io/badge/Google_Calendar-API-4285F4?style=for-the-badge&logo=google-calendar&logoColor=white)](https://developers.google.com/calendar)
+
+</div>
+
+---
+
+## Demo
+
+<div align="center">
+  <video src="Recording 2025-07-17 172601.mp4" controls width="800" style="max-width: 100%; border-radius: 8px;"></video>
+</div>
+
+---
+
+## Overview
+
+SlotBot eliminates the back-and-forth of scheduling by letting users book calendar appointments through plain conversation. A pipeline of **four specialized AI agents** coordinates autonomously — parsing intent, tracking session state, checking real availability, and confirming bookings — all powered by Google Gemini 2.5 Flash Lite.
+
+> **"Book me an appointment with Sarah on Tuesday at 5pm"** → Parsed → Validated → Booked → Confirmed ✅
+
+### Why Multi-Agent?
+
+| Single-Model Approach | SlotBot Multi-Agent |
+|---|---|
+| One model handles everything | Each agent is an expert in one domain |
+| Context window fills up quickly | Agents pass structured typed outputs |
+| No conditional branching | Workflow adapts to missing information |
+| Hard to debug or extend | Isolated agents with Pydantic-typed outputs |
+
+---
 
 ## Architecture
 
-### Backend Components
+```mermaid
+graph TB
+    subgraph FE["🖥️ Frontend · Port 5173"]
+        UI["React 18 + TypeScript"]
+        TQ["TanStack Query"]
+    end
 
-- **FastAPI Server**: Handles HTTP requests and manages session state
-- **CrewAI Multi-Agent System**: Orchestrates specialized agents for task execution
-  - **NLP Parser**: Extracts intents and entities from user messages
-  - **Session Manager**: Maintains user context and validates required information
-  - **Calendar Manager**: Executes calendar operations using Google Calendar API
-  - **Response Agent**: Formats user-friendly responses
-- **Conditional Task Execution**: Smart workflow routing based on conversation state
+    subgraph BE["⚙️ Backend · Port 8000"]
+        API["FastAPI Server"]
+        Store["In-Memory Session Store"]
+    end
 
-### Frontend Components
+    subgraph Crew["🤖 CrewAI Orchestrator"]
+        direction LR
+        NLP["NLP Parser\nGemini 2.5 Flash Lite"]
+        SM["Session Manager\nGemini 2.5 Flash Lite"]
+        CM["Calendar Manager"]
+        RA["Response Agent\nGemini 2.5 Flash Lite"]
+    end
 
-- **React + TypeScript**: Modern, type-safe frontend development
-- **Vite**: Fast development and optimized production builds
-- **Shadcn/UI**: Beautiful, accessible UI components
-- **TanStack Query**: Efficient data fetching and state management
+    GCal[("☁️ Google Calendar API")]
+
+    UI -->|"POST /chat"| API
+    API --> Store
+    API --> Crew
+    NLP --> SM
+    SM --> CM
+    SM --> RA
+    CM <-->|"OAuth2"| GCal
+    CM --> RA
+```
+
+---
+
+## Agent Workflow
+
+```mermaid
+flowchart TD
+    A([💬 User Message])
+
+    subgraph Crew["🤖 CrewAI Sequential Pipeline"]
+        B["📝 Parse User Input\n<i>NLP Parser Agent</i>\nExtract intent · entities · date/time"]
+        C["🔍 Validate Session State\n<i>Session Manager Agent</i>\nCheck booking info completeness"]
+        D{{"🔀 next_action?"}}
+        E["❓ Collect Missing Info\n⚡ ConditionalTask\nAsk follow-up questions"]
+        F["📅 Execute Calendar Action\n⚡ ConditionalTask\nBook / check availability"]
+        G["💬 Format User Response\n<i>Response Agent</i>\nGenerate friendly reply"]
+    end
+
+    GCal[("☁️ Google Calendar")]
+    H([✅ Response to User])
+
+    A --> B
+    B --> C
+    C --> D
+    D -->|"collect_info"| E
+    D -->|"execute_operation"| F
+    E --> G
+    F <-->|"read / write"| GCal
+    F --> G
+    G --> H
+
+    style E fill:#FFF3CD,stroke:#FFC107,color:#333
+    style F fill:#D4EDDA,stroke:#28A745,color:#333
+    style D fill:#D1ECF1,stroke:#17A2B8,color:#333
+```
+
+**Five-task pipeline with conditional branching:**
+
+1. `parse_user_input` — structured entity extraction (intent, email, date, time)
+2. `validate_session_state` — determines `next_action`: `collect_info` or `execute_operation`
+3. `collect_missing_information` *(ConditionalTask)* — fires only when info is incomplete
+4. `execute_calendar_action` *(ConditionalTask)* — fires only when booking can proceed
+5. `format_user_response` — final user-facing message
+
+---
+
+## Tech Stack
+
+<details>
+<summary><strong>Backend</strong></summary>
+
+| Technology | Purpose |
+|---|---|
+| **FastAPI** | Async HTTP server with automatic OpenAPI docs |
+| **CrewAI 0.134+** | Multi-agent orchestration framework |
+| **Google Gemini 2.5 Flash Lite** | LLM powering all four agents |
+| **Google Calendar API** | Calendar read/write via OAuth2 |
+| **Pydantic** | Typed data validation across agent boundaries |
+| **Uvicorn** | ASGI production server |
+| **Python 3.10–3.13** | Runtime |
+
+</details>
+
+<details>
+<summary><strong>Frontend</strong></summary>
+
+| Technology | Purpose |
+|---|---|
+| **React 18** | UI rendering |
+| **TypeScript 5.5** | Type-safe JavaScript |
+| **Vite 5.4** | Fast dev server and bundler |
+| **Shadcn/UI** | Accessible component library (Radix UI primitives) |
+| **Tailwind CSS 3.4** | Utility-first styling |
+| **TanStack Query 5** | Server state and data fetching |
+| **React Router 6** | Client-side routing |
+| **Sonner** | Toast notifications |
+
+</details>
+
+---
 
 ## Project Structure
 
 ```
 slotbot/
 ├── api/                        # FastAPI application
-│   ├── main.py                # Application entry point
-│   ├── dependencies.py        # Shared dependencies
-│   ├── schemas.py             # Pydantic models
+│   ├── main.py                # App entry point + CORS middleware
+│   ├── dependencies.py        # DI + in-memory session store
+│   ├── schemas.py             # Pydantic API contracts
 │   └── routes/
-│       ├── chat.py            # Chat endpoints
-│       └── health.py          # Health check endpoints
-├── src/slotbot/               # Core application logic
-│   ├── crew.py                # CrewAI agent orchestration
-│   ├── models.py              # Data models
+│       ├── chat.py            # /start_chat, /chat endpoints
+│       └── health.py          # /health check
+│
+├── src/slotbot/               # Core business logic
+│   ├── crew.py                # CrewAI agent orchestration (5 tasks, 4 agents)
+│   ├── models.py              # Domain models (UserInputParsed, SessionState, BookAppointmentOutput)
 │   ├── config/
-│   │   ├── agents.yaml        # Agent configurations
-│   │   └── tasks.yaml         # Task definitions
-│   ├── tools/                 # Custom tools
-│   │   └── calendar_tools.py  # Google Calendar integration
+│   │   ├── agents.yaml        # Agent roles, goals, and LLM config
+│   │   └── tasks.yaml         # Task descriptions and expected outputs
+│   ├── tools/
+│   │   ├── calendar_tools.py  # BookAppointmentTool, CheckAvailabilityTool
+│   │   └── custom_tool.py
 │   └── google_api/
-│       └── Oauth_client.py    # OAuth authentication
-├── frontend/                   # React frontend application
+│       └── Oauth_client.py    # OAuth2 flow for Google Calendar
+│
+├── frontend/                  # React + TypeScript UI
 │   ├── src/
-│   │   ├── App.tsx            # Main application component
-│   │   └── main.tsx           # Application entry point
+│   │   ├── App.tsx
+│   │   └── main.tsx
 │   └── package.json
-├── knowledge/                  # Knowledge base files
-├── tests/                      # Test files
-├── pyproject.toml             # Python project configuration
-└── requirements.txt           # Python dependencies
+│
+├── knowledge/                 # Agent knowledge base files
+├── outputs/                   # Task output artifacts (JSON, for debugging)
+├── tests/                     # Test suite
+├── pyproject.toml
+└── requirements.txt
 ```
 
-## Prerequisites
+---
 
-- Python 3.10 - 3.13
-- Node.js 18+ and npm/pnpm
-- Google Cloud Project with Calendar API enabled
-- Google OAuth 2.0 credentials
+## Getting Started
 
-## Installation
+### Prerequisites
+
+- **Python** 3.10–3.13
+- **Node.js** 18+ with npm or pnpm
+- A **Google Cloud Project** with the Calendar API enabled
+- **OAuth 2.0 credentials** downloaded as `credentials.json`
 
 ### Backend Setup
 
-1. Clone the repository:
 ```bash
+# 1. Clone the repository
 git clone <repository-url>
 cd slotbot
-```
 
-2. Create and activate a virtual environment:
-```bash
+# 2. Create and activate a virtual environment
 python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-```
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
 
-3. Install Python dependencies:
-```bash
+# 3. Install dependencies
 pip install -r requirements.txt
+
+# 4. Configure environment variables
+cp .env.example .env             # then fill in your values
 ```
 
-4. Set up Google Calendar API:
-   - Create a Google Cloud Project
-   - Enable Google Calendar API
-   - Create OAuth 2.0 credentials
-   - Download credentials and save as `credentials.json` in the project root
+### Environment Variables
 
-5. Configure environment variables:
-```bash
-# Create .env file
-cp .env.example .env  # If available, or create manually
+```env
+# LLM
+GEMINI_API_KEY=your_gemini_api_key
+
+# Google Calendar OAuth
+GOOGLE_CALENDAR_ID=your_calendar_id@gmail.com
 ```
 
-Add your API keys and configuration to `.env`.
+> Place your downloaded `credentials.json` (OAuth client secrets) in the **project root**. This file is gitignored — never commit it.
+
+### Google Calendar Setup
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a project and enable the **Google Calendar API**
+3. Create **OAuth 2.0 credentials** (Desktop app)
+4. Download the credentials as `credentials.json` to the project root
+5. On first run, a browser window will open for OAuth consent — this creates `token.json`
 
 ### Frontend Setup
 
-1. Navigate to the frontend directory:
 ```bash
 cd frontend
+npm install        # or: pnpm install
 ```
 
-2. Install dependencies:
-```bash
-npm install
-# or
-pnpm install
-```
+---
 
 ## Usage
 
-### Running the Backend
-
-Start the FastAPI server:
+### Start the Backend
 
 ```bash
 uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-The API will be available at `http://localhost:8000`.
+| URL | Description |
+|---|---|
+| `http://localhost:8000` | API base |
+| `http://localhost:8000/docs` | Swagger UI |
+| `http://localhost:8000/redoc` | ReDoc |
 
-API Documentation:
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
-
-### Running the Frontend
-
-In a separate terminal, start the development server:
+### Start the Frontend
 
 ```bash
 cd frontend
-npm run dev
-# or
-pnpm dev
+npm run dev        # or: pnpm dev
+# → http://localhost:5173
 ```
 
-The frontend will be available at `http://localhost:5173`.
+---
 
-## API Endpoints
+## API Reference
 
-### Chat Endpoints
+### `POST /start_chat`
 
-- **POST** `/start_chat` - Initialize a new chat session
-  - Returns: `{ session_id: string, message: string }`
+Initialize a new conversation session.
 
-- **POST** `/chat` - Send a message and get a response
-  - Request body:
-    ```json
-    {
-      "session_id": "string",
-      "user_message": "string"
-    }
-    ```
-  - Response:
-    ```json
-    {
-      "session_id": "string",
-      "chatbot_response": "string"
-    }
-    ```
+```json
+// Response
+{
+  "session_id": "uuid-string",
+  "message": "Welcome! How can I help you schedule today?"
+}
+```
 
-### Health Check
+### `POST /chat`
 
-- **GET** `/health` - Check API health status
+Send a user message and receive an agent-generated response.
 
-## CrewAI Workflow
+```json
+// Request
+{
+  "session_id": "uuid-string",
+  "user_message": "Book me an appointment Tuesday at 5pm"
+}
 
-The chatbot uses a sequential multi-agent workflow:
+// Response
+{
+  "session_id": "uuid-string",
+  "chatbot_response": "I'd be happy to help! Could I get your name and email address?"
+}
+```
 
-1. **Parse User Input**: Extract intent and entities from user message
-2. **Validate Session State**: Check if all required information is available
-3. **Collect Missing Information** (Conditional): Ask for missing details if needed
-4. **Execute Calendar Action** (Conditional): Perform calendar operations
-5. **Format User Response**: Generate friendly response for the user
+### `GET /health`
+
+Returns API health status.
+
+---
 
 ## Development
 
 ### Running Tests
 
 ```bash
-# Backend tests
-pytest
-
-# Run specific test file
-pytest tests/test_crew.py
+pytest                          # all tests
+pytest tests/test_crew.py       # specific file
 ```
 
 ### Code Style
 
-The project follows SOLID principles and clean code practices:
-- Single Responsibility Principle
-- Repository pattern for data access
-- Separation of business logic from models
-- Test-Driven Development (TDD)
+```bash
+ruff check .    # lint
+ruff format .   # format
+```
 
-## Configuration
-
-### Agent Configuration
-
-Agents are configured in [src/slotbot/config/agents.yaml](src/slotbot/config/agents.yaml):
-- NLP Parser: Gemini 2.5 Flash Lite
-- Session Manager: Gemini 2.5 Flash Lite
-- Calendar Manager: Handles calendar operations
-- Response Agent: Formats user responses
-
-### Task Configuration
-
-Tasks are defined in [src/slotbot/config/tasks.yaml](src/slotbot/config/tasks.yaml):
-- User input parsing
-- Session state validation
-- Information collection
-- Calendar action execution
-- Response formatting
-
-## Technologies Used
-
-### Backend
-- FastAPI - Modern web framework for APIs
-- CrewAI - Multi-agent AI orchestration
-- Pydantic - Data validation
-- Google Calendar API - Calendar integration
-- Python-dotenv - Environment configuration
-
-### Frontend
-- React 18 - UI library
-- TypeScript - Type-safe JavaScript
-- Vite - Build tool
-- Shadcn/UI - UI component library
-- Tailwind CSS - Utility-first CSS
-- TanStack Query - Data fetching
-- React Router - Routing
-
-## Contributing
-
-Contributions are welcome! Please follow these guidelines:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Acknowledgments
-
-- Built with [CrewAI](https://www.crewai.com/) for multi-agent orchestration
-- UI components from [Shadcn/UI](https://ui.shadcn.com/)
-- Powered by Google Calendar API
-
-## Support
-
-For issues, questions, or contributions, please open an issue in the GitHub repository.
+The project follows **SOLID principles**:
+- **Single Responsibility** — each agent handles exactly one domain
+- **Open-Closed** — add new agents/tools without touching the core pipeline
+- **Repository pattern** for data access
+- **Pydantic** for strict type safety across all agent boundaries
 
 ---
 
-**Note**: Make sure to keep your `credentials.json`, `token.json`, and `.env` files secure and never commit them to version control.
+## Configuration
+
+Agent roles, goals, and LLM settings are defined in [src/slotbot/config/agents.yaml](src/slotbot/config/agents.yaml).
+
+Task descriptions, expected outputs, and context chaining are in [src/slotbot/config/tasks.yaml](src/slotbot/config/tasks.yaml).
+
+---
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Commit using conventional commits: `git commit -m 'feat: add amazing feature'`
+4. Push to the branch: `git push origin feature/amazing-feature`
+5. Open a Pull Request
+
+---
+
+## License
+
+This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+
+---
+
+## Acknowledgments
+
+- [CrewAI](https://www.crewai.com/) — multi-agent orchestration framework
+- [Shadcn/UI](https://ui.shadcn.com/) — beautifully accessible UI components
+- [Google Calendar API](https://developers.google.com/calendar) — calendar integration
+- [Google Gemini](https://ai.google.dev/) — LLM backbone for all agents
+
+---
+
+> **Security note**: Keep `credentials.json`, `token.json`, and `.env` out of version control. All three are gitignored by default.
+
+<div align="center">
+  <sub>Built with CrewAI · FastAPI · React</sub>
+</div>
