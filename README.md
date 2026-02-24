@@ -26,7 +26,9 @@
 ## Demo
 
 <div align="center">
-  [![Demo Video](https://img.youtube.com/vi/C7dZhD9ZNn4/maxresdefault.jpg)](https://youtu.be/C7dZhD9ZNn4)
+  <a href="https://youtu.be/C7dZhD9ZNn4">
+    <img src="https://img.youtube.com/vi/C7dZhD9ZNn4/maxresdefault.jpg" alt="Demo Video" width="800" style="max-width: 100%;">
+  </a>
 </div>
 
 ---
