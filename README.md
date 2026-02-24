@@ -26,7 +26,7 @@
 ## Demo
 
 <div align="center">
-  <video src="Recording 2025-07-17 172601.mp4" controls width="800" style="max-width: 100%; border-radius: 8px;"></video>
+  [![Demo Video](https://img.youtube.com/vi/C7dZhD9ZNn4/maxresdefault.jpg)](https://youtu.be/C7dZhD9ZNn4)
 </div>
 
 ---
